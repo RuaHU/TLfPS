@@ -17,7 +17,7 @@ Download yolov3_reid.h5, save to ./saved_weights
 ```python
 #model: [yolov3], gpu: [0]
 #ctrl+L: load model; ctrl+R: select query image & draw roi; ctrl+G:select gallery images; ctrl+S:search
-python application/app.py -m yolov3 -g 0
+python app/app.py -m yolov3 -g 0
 ```
 
 ## Evaluation
