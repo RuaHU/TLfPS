@@ -27,14 +27,14 @@ class MODELS():
         input_loc = KL.Input(shape = [None, 1], name = 'loc')
         if self.config.M == 'mrcnn':
             feature_maps = resnet_graph(input_img, training = False)
-            reid_feature_map = mrcnn_proposal_map(feature_maps)[-2:]
+            pyramid_feature_maps = mrcnn_proposal_map(feature_maps)
         elif self.config.M == 'yolov3':
             feature_maps = darknet_body_v3(input_img, training = False)
-            reid_feature_map = yolo_proposal_map_v3(feature_maps, training = False)[-2:]
+            pyramid_feature_maps = yolo_proposal_map_v3(feature_maps, training = False)
         elif self.config.M == 'yolov4':
             feature_maps = darknet_body_v4(input_img, training = False)
-            reid_feature_map = yolo_proposal_map_v4(feature_maps, training = False)[-2:]
-        reid_map = ATLnet(reid_feature_map, layer = self.config.layer, SEnet = self.config.SEnet)
+            pyramid_feature_maps = yolo_proposal_map_v4(feature_maps, training = False)
+        reid_map = ATLnet(pyramid_feature_maps[-2:], layer = self.config.layer, SEnet = self.config.SEnet)
         pooled = feature_pooling(self.config, name = "AlignedROIPooling")([input_bbox] + reid_map)
         pooled = gatherValidItems(pooled, input_id)
         fl = sMGN(pooled, _eval = False, l2_norm = self.config.l2_norm)
