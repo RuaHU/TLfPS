@@ -64,6 +64,11 @@ def get_gradients(self, loss, params):
     grads = [g if g is not None else tf.constant(0, dtype = 'float32') for g in grads]
 '''
 ```
+### Training for YOLOv4, Mask RCNN, DLA-34 etc.
+- get weights from the corresponding projects and convert them to .h5 format
+- put .h5 weights in pretrianed_weights with name [yolov4.h5], [mrcnn.h5], [dla_34.h5]
+- change [yolov3] to [yolov4], [mrcnn], [dla-34] etc. The training process is the same with the training of [yolov3]
 
-## Train YOLOv3 with you own dataset
+## Train YOLOv3 detection network
+
 - 
