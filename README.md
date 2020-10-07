@@ -41,7 +41,6 @@ python utils/elapsedtime.py -m yolov3 -g 0 -p [path/to/CUHK_SYSU] -r 0
 #model: [yolov3], gpu: [0], dataset: [path/to/CUHK_SYSU], reid: [1]; test the running time with reid module
 python utils/elapsedtime.py -m yolov3 -g 0 -p [path/to/CUHK_SYSU] -r 1
 ```
-
 ## Training
 - Download [yolov3_reid.h5](https://drive.google.com/file/d/1Dne2_ZCOAA4nn8PySBjzPFUaZbHpYsd5/view?usp=sharing), save to ./saved_weights
 - Download [CUHK_SYSU](https://drive.google.com/file/d/1D7VL43kIV9uJrdSCYl53j89RE2K-IoQA/view?usp=sharing) dataset
