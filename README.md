@@ -25,17 +25,35 @@ python app/app.py -m yolov3 -g 0
 - Download [yolov3_reid.h5](https://drive.google.com/file/d/1Dne2_ZCOAA4nn8PySBjzPFUaZbHpYsd5/view?usp=sharing), save to ./saved_weights
 - Download [CUHK_SYSU](https://drive.google.com/file/d/1D7VL43kIV9uJrdSCYl53j89RE2K-IoQA/view?usp=sharing) dataset
 - Download [PRW](https://drive.google.com/file/d/116_mIdjgB-WJXGe8RYJDWxlFnc_4sqS8/view?usp=sharing) dataset
+### evaluate searching score for PRW and CUHK-SYSU
 ```python
 #model: [yolov3], gpu: [0], dataset: [path/to/CUHK_SYSU], experiment name: [cuhk_default]; evaluate on CUHK-SYSU dataset
 python utils/evaluation.py -m yolov3 -g 0 -p path/to/CUHK_SYSU -e cuhk_default
 #model: [yolov3], gpu: [0], dataset: [path/to/PRW], experiment name: [default]; evaluate on PRW dataset
 python utils/prw_evaluation.py -m yolov3 -g 0 -p path/to/PRW -e prw_default
+```
+### visualization for CUHK-SYSU
+```python
 #model: [yolov3], gpu: [0], dataset: [path/to/CUHK_SYSU], experiment name: [cuhk_default]; TSNE visualization for CUHK-SYSU dataset
 python utils/tsne_cuhk.py -m yolov3 -g 0 -p path/to/CUHK_SYSU -e cuhk_default
 python utils/TSNE.py -m yolov3 -g 0 -p cuhk -e cuhk_default
+python utils/failure_cases.py -m yolov3 -g 0 -c path/to/CUHK_SYSU -e cuhk_default
+```
+![48 failure cases in CUHK-SYSU](https://github.com/RuaHU/TLfPS/blob/master/experiment_results/cuhk_canvas.jpg)
+
+### visualization for PRW
+```python
 #model: [yolov3], gpu: [0], dataset: [path/to/PRW], experiment name: [prw_default]; TSNE visualization for PRW dataset
-python utils/tsne_prw.py -m yolov3 -g 0 -p path/to/PRW -e cuhk_default
+python utils/tsne_prw.py -m yolov3 -g 0 -p path/to/PRW -e prw_default
 python utils/TSNE.py -m yolov3 -g 0 -p prw -e prw_default
+python utils/failure_cases.py -m yolov3 -g 0 -p path/to/PRW -e prw_default
+```
+![TSNE_PRW.jpg](https://github.com/RuaHU/TLfPS/blob/master/experiment_results/TSNE_PRW.jpg)
+![prw low resolution](https://github.com/RuaHU/TLfPS/blob/master/experiment_results/prw_low.jpg)
+![48 failure cases in PRW](https://github.com/RuaHU/TLfPS/blob/master/experiment_results/prw_canvas.jpg)
+
+### evaluate running speed 
+```python
 #model: [yolov3], gpu: [0], dataset: [path/to/CUHK_SYSU], reid: [0]; test the running time without reid module
 python utils/elapsedtime.py -m yolov3 -g 0 -p [path/to/CUHK_SYSU] -r 0
 #model: [yolov3], gpu: [0], dataset: [path/to/CUHK_SYSU], reid: [1]; test the running time with reid module
