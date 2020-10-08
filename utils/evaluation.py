@@ -120,10 +120,9 @@ class EVALUATION():
         tape = {}
         for i in range(len(qfeatures)):
             y_true, y_score = [], []
-            imgs, rois = [], []
+            y_boxes, y_gname = [], []
             count_gt, count_tp = 0, 0
             qimg_name, qfeat, qbox = qfeatures[i]
-            qbox[2:] += qbox[:2]
             probe_imname = str(protoc['Query'][i]['imname'][0, 0][0])
             assert probe_imname == qimg_name
             tested = set([probe_imname])
@@ -147,11 +146,11 @@ class EVALUATION():
                             label[j] = 1
                             count_tp += 1
                             break
-                        
+                
                 y_true.extend(list(label))
                 y_score.extend(list(sim))
-                imgs.extend([gallery_imname] * len(sim))
-                rois.extend(list(gboxes))
+                y_boxes.extend(list(gboxes))
+                y_gname.extend([gallery_imname for _ in gboxes])
                 tested.add(gallery_imname)
             if gallery_size == -1:
                 for gallery_imname in name_to_det_feat.keys():
@@ -161,11 +160,13 @@ class EVALUATION():
                     label = np.zeros(len(sim), dtype = np.int32)
                     y_true.extend(list(label))
                     y_score.extend(list(sim))
-                    imgs.extend([gallery_imname] * len(sim))
-                    rois.extend(list(gboxes))
+                    y_boxes.extend(list(gboxes))
+                    y_gname.extend([gallery_imname for _ in gboxes])
                     
             y_score = np.array(y_score)
             y_true = np.array(y_true)
+            y_boxes = np.array(y_boxes)
+            y_gname = np.array(y_gname)
             assert count_tp <= count_gt
             recall_rate = count_tp * 1.0 / count_gt
             all_recall_rate.append(recall_rate)
@@ -176,7 +177,11 @@ class EVALUATION():
             inds = np.argsort(y_score)[::-1]
             y_score = y_score[inds]
             y_true = y_true[inds]
-            accs.append([min(1, sum(y_true[:k])) for k in topk])
+            y_boxes = y_boxes[inds]
+            y_gname = y_gname[inds]
+            acc = [min(1, sum(y_true[:k])) for k in topk]
+            accs.append(acc)
+            tape[qimg_name] = [i, qbox, ap, acc, recall_rate, y_score, y_true, y_boxes, y_gname]
             print("\r%d:\t%d|%d|%.2f|%.2f"%(gallery_size, len(aps), len(qfeatures), np.mean(aps), np.mean(accs, axis = 0)[0]), end = '')
         print('')
         print('search ranking:')
@@ -185,6 +190,21 @@ class EVALUATION():
         accs = np.mean(accs, axis=0)
         for i, k in enumerate(topk):
             print('  top-{:2d} = {:.2%}'.format(k, accs[i]))
+
+        if gallery_size == -1:
+            record_aps = []
+            new_tape = {}
+            for key in tape.keys():
+                record_aps.append(tape[key][2])
+            record_aps.sort()
+            th = record_aps[50]
+            for key in tape.keys():
+                if tape[key][2] > th:continue
+                new_tape[key] = tape[key]
+        
+            filepath = os.path.join(parpath, 'experiment_results', self.experiment_name, 'cuhk_%s_tape.pkl'%self.config.M)
+            pickle.dump(new_tape, filepath)
+
         return aps, accs
     
     def query_feature_extractor(self,):
