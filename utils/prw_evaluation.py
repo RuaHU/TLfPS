@@ -227,10 +227,6 @@ class EVALUATION():
                             count_tp += 1
                             break
                 
-                inds = np.argsort(sim)[::-1]
-                sim = sim[inds]
-                gboxes = gboxes[inds]
-
                 y_true.extend(list(label))
                 y_score.extend(list(sim))
                 y_boxes.extend(list(gboxes))
@@ -275,8 +271,8 @@ class EVALUATION():
             if tape[key][2] > th:continue
             new_tape[key] = tape[key]
         
-        f = open('tape', 'wb')
-        pickle.dump(new_tape, f)
+        filepath = os.path.join(parpath, 'experiment_results', self.experiment_name, 'prw_%s_tape.pkl'%self.config.M)
+        pickle.dump(new_tape, filepath)
         
         return aps, accs
 
