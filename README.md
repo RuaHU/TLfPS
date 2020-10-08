@@ -39,7 +39,7 @@ python utils/tsne_cuhk.py -m yolov3 -g 0 -p path/to/CUHK_SYSU -e cuhk_default
 python utils/TSNE.py -m yolov3 -g 0 -p cuhk -e cuhk_default
 python utils/failure_cases.py -m yolov3 -g 0 -c path/to/CUHK_SYSU -e cuhk_default
 ```
-- 48 failure cases in CUHK-SYSU.
+- 48 failure cases in CUHK-SYSU. (3 images a group, first is query, then false positive, then true negative. note there are some mistakes from the dataset)
 ![48 failure cases in CUHK-SYSU](https://github.com/RuaHU/TLfPS/blob/master/experiment_results/cuhk_canvas.jpg)
 
 ### visualization for PRW
@@ -53,7 +53,7 @@ python utils/failure_cases.py -m yolov3 -g 0 -p path/to/PRW -e prw_default
 ![TSNE_PRW.jpg](https://github.com/RuaHU/TLfPS/blob/master/experiment_results/TSNE_PRW.jpg)
 - TSNE visualization for PRW, image version, high resolution image is able to [download](https://drive.google.com/file/d/1269Zz3M8P6eYnhNK0JYsZua1Oep7zh8_/view?usp=sharing)
 ![prw low resolution](https://github.com/RuaHU/TLfPS/blob/master/experiment_results/prw_low.jpg)
-- 48 failure cases in PRW.
+- 48 failure cases in PRW. (3 images a group, first is query, then false positive, then true negative. note there are some mistakes from the dataset)
 ![48 failure cases in PRW](https://github.com/RuaHU/TLfPS/blob/master/experiment_results/prw_canvas.jpg)
 
 ### evaluate running speed 
