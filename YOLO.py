@@ -194,17 +194,17 @@ class YOLOv4:
         return KL.Lambda(lambda x : [K.stop_gradient(f) for f in x])([C2, C3, C4, C5])
 
     def reid(self, inputs, training = False):
-        if self.cfg.M == 'yolov3':
+        if self.cfg.M == 'yolov4':
             feature_maps = self.darknet_body(inputs, training = training)
             feature_maps = self.proposal_map(feature_maps, training = training)
-        elif self.cfg.M == 'yolov3-tiny':
+        elif self.cfg.M == 'yolov4-tiny':
             feature_maps = self.tiny(inputs, training = training)
         return feature_maps[:-2], feature_maps[-2:]
 
     def model(self, model_type):
         input_image = KL.Input(shape = [None, None, 3], name ='input_image')
         input_bbox = KL.Input(shape = [None, 4], name = 'input_bbox')
-        detection_map, reid_map = self.reid(input_image)[0]
+        detection_map, reid_map = self.reid(input_image)
         detection_score, detection, regression, regression_scores = KL.Lambda(lambda x : detector(x, input_bbox, self.cfg))(detection_map)
         
         if model_type == 'detection':
@@ -228,7 +228,7 @@ class YOLOv4:
         #152, 76, 38, 19
         [C2, C3, C4, C5] = inputs
         
-        P5 = self.make_last_layers(C5, 512, 255, spp = True, training = training)
+        P5 = self.make_last_layers(C5, 512, 255, bspp = True, training = training)
     
         P5_up = compose(DarknetConv2D_BN_Leaky(256, (1,1), training = training), KL.UpSampling2D(2))(P5)
         
@@ -285,7 +285,7 @@ class YOLOv4:
         route = KL.Concatenate()([postconv, shortconv])
         return DarknetConv2D_BN_Mish(num_filters, (1,1), name = gnames[4], training = training)(route)
 
-    def make_last_layers(self, x, num_filters, out_filters, spp = False, name = None, training = None, last = False):
+    def make_last_layers(self, x, num_filters, out_filters, bspp = False, name = None, training = None, last = False):
         '''6 Conv2D_BN_Leaky layers followed by a Conv2D_linear layer'''
         if name is None:
             names = [None for i in range(8)]
@@ -295,7 +295,7 @@ class YOLOv4:
                 DarknetConv2D_BN_Leaky(num_filters, (1,1), name = names[0], training = training),
                 DarknetConv2D_BN_Leaky(num_filters*2, (3,3), name = names[1], training = training),
                 DarknetConv2D_BN_Leaky(num_filters, (1,1), name = names[2], training = training),
-                spp(spp = spp, name = names[7], training = training),
+                spp(spp = bspp, name = names[7], training = training),
                 DarknetConv2D_BN_Leaky(num_filters*2, (3,3), name = names[3], training = training),
                 DarknetConv2D_BN_Leaky(num_filters, (1,1), name = names[4], training = training))(x)
         if not last:return x
