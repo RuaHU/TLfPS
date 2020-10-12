@@ -86,8 +86,7 @@ class DCNv2(KL.Layer):
         #offset: [B, H, W, ic] convx [kh, kw, ic, 3 * groups * kh * kw] ---> [B, H, W, 3 * groups * kh * kw]
         offset = tf.nn.conv2d(x, self.offset_kernel, strides = self.stride, padding = 'SAME')
         offset += self.offset_bias
-        bs, ih, iw, ic = [v.value for v in x.shape]
-        bs = tf.shape(x)[0]
+        bs, ih, iw, ic = tf.shape(x)[0], tf.shape(x)[1], tf.shape(x)[2], tf.shape(x)[3]
         #[B, H, W, 18], [B, H, W, 9]
         oyox, mask = offset[..., :2*self.ks], offset[..., 2*self.ks:]
         mask = tf.nn.sigmoid(mask)
@@ -98,12 +97,13 @@ class DCNv2(KL.Layer):
         #[B, H, W, 9, 2]
         grid_yx = tf.cast(grid_yx, 'float32') + tf.reshape(oyox, [bs, ih, iw, -1, 2])
         grid_iy0ix0 = tf.floor(grid_yx)
-        grid_iy1ix1 = tf.clip_by_value(grid_iy0ix0 + 1, 0, tf.constant([ih+1, iw+1], dtype = 'float32'))
+        ceil = tf.cast(tf.shape(x)[1:3]+1, 'float32')
+        grid_iy1ix1 = tf.clip_by_value(grid_iy0ix0 + 1, 0, ceil)
         #[B, H, W, 9, 1] * 2
         grid_iy1, grid_ix1 = tf.split(grid_iy1ix1, 2, axis = 4)
-        grid_iy0ix0 = tf.clip_by_value(grid_iy0ix0, 0, tf.constant([ih+1, iw+1], dtype = 'float32'))
+        grid_iy0ix0 = tf.clip_by_value(grid_iy0ix0, 0, ceil)
         grid_iy0, grid_ix0 = tf.split(grid_iy0ix0, 2, axis = 4)
-        grid_yx = tf.clip_by_value(grid_yx, 0, tf.constant([ih+1, iw+1], dtype = 'float32'))
+        grid_yx = tf.clip_by_value(grid_yx, 0, ceil)
         #[B, H, W, 9, 4, 1]
         batch_index = tf.tile(tf.reshape(tf.range(bs), [bs, 1, 1, 1, 1, 1]), [1, ih, iw, self.ks, 4, 1])
         #[B, H, W, 9, 4, 2]
