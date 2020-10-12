@@ -8,121 +8,8 @@ Created on Wed Sep  9 23:04:53 2020
 import tensorflow as tf
 import keras.layers as KL
 import keras.models as KM
-class DCNv2(KL.Layer):
-    def __init__(self, filters, 
-                 kernel_size,
-                 use_bias=True,
-                 kernel_initializer='glorot_uniform',
-                 bias_initializer='zeros',
-                 kernel_regularizer=None,
-                 bias_regularizer=None,
-                 **kwargs):
-        self.filters = filters
-        self.kernel_size = (kernel_size, kernel_size)
-        self.stride = (1, 1, 1, 1)
-        self.dilation = (1, 1)
-        self.deformable_groups = 1
-        self.use_bias = use_bias
-        self.kernel_initializer=kernel_initializer
-        self.bias_initializer=bias_initializer
-        self.kernel_regularizer=kernel_regularizer
-        self.bias_regularizer=bias_regularizer
-        super(DCNv2, self).__init__(**kwargs)
-    
-    def build(self, input_shape):
-        self.kernel = self.add_weight(
-            name = 'kernel',
-            shape = self.kernel_size + (int(input_shape[-1]), self.filters),
-            initializer = self.kernel_initializer,
-            regularizer = self.kernel_regularizer,
-            trainable = True,
-            dtype = 'float32',
-            )
-        
-        if self.use_bias:
-            self.bias = self.add_weight(
-                name = 'bias',
-                shape = (self.filters,),
-                initializer=self.bias_initializer,
-                regularizer=self.bias_regularizer,
-                trainable=True,
-                dtype='float32',
-                )
-        
-        #[kh, kw, ic, 3 * groups * kh, kw]--->3 * groups * kh * kw = oc [output channels]
-        self.offset_kernel = self.add_weight(
-            name = 'offset_kernel',
-            shape = self.kernel_size + (input_shape[-1], 3 * self.deformable_groups * self.kernel_size[0] * self.kernel_size[1]), 
-            initializer = 'zeros',
-            trainable = True,
-            dtype = 'float32')
-        
-        self.offset_bias = self.add_weight(
-            name = 'offset_bias',
-            shape = (3 * self.kernel_size[0] * self.kernel_size[1] * self.deformable_groups,),
-            initializer='zeros',
-            trainable = True,
-            dtype = 'float32',
-            )
-        self.ks = self.kernel_size[0] * self.kernel_size[1]
-        self.ph, self.pw = (self.kernel_size[0] - 1) // 2, (self.kernel_size[1] - 1) // 2
-        self.phw = tf.constant([self.ph, self.pw], dtype = 'int32')
-        self.patch_yx = tf.stack(tf.meshgrid(tf.range(-self.phw[1], self.phw[1] + 1), tf.range(-self.phw[0], self.phw[0] + 1))[::-1], axis = -1)
-        self.patch_yx = tf.reshape(self.patch_yx, [-1, 2])
-        super(DCNv2, self).build(input_shape)
-        
-        
-    def call(self, x):
-        #x: [B, H, W, C]
-        #offset: [B, H, W, ic] convx [kh, kw, ic, 3 * groups * kh * kw] ---> [B, H, W, 3 * groups * kh * kw]
-        offset = tf.nn.conv2d(x, self.offset_kernel, strides = self.stride, padding = 'SAME')
-        offset += self.offset_bias
-        bs, ih, iw, ic = tf.shape(x)[0], tf.shape(x)[1], tf.shape(x)[2], tf.shape(x)[3]
-        #[B, H, W, 18], [B, H, W, 9]
-        oyox, mask = offset[..., :2*self.ks], offset[..., 2*self.ks:]
-        mask = tf.nn.sigmoid(mask)
-        #[H, W, 2]
-        grid_yx = tf.stack(tf.meshgrid(tf.range(iw), tf.range(ih))[::-1], axis = -1)
-        #[1, H, W, 9, 2]
-        grid_yx = tf.reshape(grid_yx, [1, ih, iw, 1, 2]) + self.phw + self.patch_yx
-        #[B, H, W, 9, 2]
-        grid_yx = tf.cast(grid_yx, 'float32') + tf.reshape(oyox, [bs, ih, iw, -1, 2])
-        grid_iy0ix0 = tf.floor(grid_yx)
-        up_limit = tf.cast(tf.stack([ih+1, iw+1]), 'float32')
-        grid_iy1ix1 = tf.clip_by_value(grid_iy0ix0 + 1, 0, up_limit)
-        #[B, H, W, 9, 1] * 2
-        grid_iy1, grid_ix1 = tf.split(grid_iy1ix1, 2, axis = -1)
-        grid_iy0ix0 = tf.clip_by_value(grid_iy0ix0, 0, up_limit)
-        grid_iy0, grid_ix0 = tf.split(grid_iy0ix0, 2, axis = -1)
-        grid_yx = tf.clip_by_value(grid_yx, 0, up_limit)
-        #[B, H, W, 9, 4, 1]
-        batch_index = tf.tile(tf.reshape(tf.range(bs), [bs, 1, 1, 1, 1, 1]), [1, ih, iw, self.ks, 4, 1])
-        #[B, H, W, 9, 4, 2]
-        grid = tf.reshape(tf.concat([grid_iy1ix1, grid_iy1, grid_ix0, grid_iy0, grid_ix1, grid_iy0ix0], axis = -1), [bs, ih, iw, self.ks, 4, 2])
-        #[B, H, W, 9, 4, 3]
-        grid = tf.concat([batch_index, tf.cast(grid, 'int32')], axis = -1)
-        #[B, H, W, 9, 2, 2]
-        delta = tf.reshape(tf.concat([grid_yx - grid_iy0ix0, grid_iy1ix1 - grid_yx], axis = -1), [bs, ih, iw, self.ks, 2, 2])
-        #[B, H, W, 9, 2, 1] * [B, H, W, 9, 1, 2] = [B, H, W, 9, 2, 2]
-        w = tf.expand_dims(delta[..., 0], axis = -1) * tf.expand_dims(delta[..., 1], axis = -2)
-        #[B, H+2, W+2, C]
-        x = tf.pad(x, [[0, 0], [int(self.ph), int(self.ph)], [int(self.pw), int(self.pw)], [0, 0]])
-        #[B, H, W, 9, 4, C]
-        map_sample = tf.gather_nd(x, grid)
-        #([B, H, W, 9, 4, 1] * [B, H, W, 9, 4, C]).SUM(-2) * [B, H, W, 9, 1] = [B, H, W, 9, C]
-        map_bilinear = tf.reduce_sum(tf.reshape(w, [bs, ih, iw, self.ks, 4, 1]) * map_sample, axis = -2) * tf.expand_dims(mask, axis = -1)
-        #[B, H, W, 9*C]
-        map_all = tf.reshape(map_bilinear, [bs, ih, iw, -1])
-        #[B, H, W, OC]
-        output = tf.nn.conv2d(map_all, tf.reshape(self.kernel, [1, 1, -1, self.filters]), strides = self.stride, padding = 'SAME')
-        if self.use_bias:
-            output += self.bias
-        return output
-        
-    def compute_output_shape(self, input_shape):
-        return input_shape[:-1] + (self.filters,)
-
-    
+from DCNv2 import DCNv2
+from BaseNet import *
 
 class BasicBlock():
     def __init__(self, planes, name, stride = 1, dilation = 1):
@@ -275,7 +162,8 @@ class IDAUp():
         up_x = KL.ZeroPadding2D(((pad, pad - (strides - 1)), (pad, pad - (strides - 1))))(up_x)
         return  KL.DepthwiseConv2D((kernel_size, kernel_size), name = name, use_bias = use_bias)(up_x)
         
-    def __call__(self, x, startp, endp, training = None):
+    def __call__(self, x, startp, endp, ret = False, training = None):
+        if ret:collector = [x[0]]
         for i in range(startp + 1, endp):
             x[i] = DCNv2(self.o, 3, name = self.name + '.proj_%d.conv'%(i-startp))(x[i])
             x[i] = KL.BatchNormalization(epsilon=1e-5, name = self.name + '.proj_%d.actf.0'%(i-startp))(x[i], training = training)
@@ -285,10 +173,12 @@ class IDAUp():
                                                  pad = self.up_f[i-startp] * 2 - 1 - self.up_f[i-startp]//2, \
                                                  strides = self.up_f[i-startp])
             
+            if ret:collector.append(x[i])
             x[i] = KL.Add()([x[i], x[i-1]])
             x[i] = DCNv2(self.o, 3, name = self.name + '.node_%d.conv'%(i-startp))(x[i])
             x[i] = KL.BatchNormalization(epsilon=1e-5, name = self.name + '.node_%d.actf.0'%(i-startp))(x[i], training = training)
             x[i] = KL.Activation('relu')(x[i])
+        if ret:return KL.Concatenate()(collector)
             
 import numpy as np    
 class DLAUp():
@@ -310,7 +200,15 @@ class DLAUp():
         return out
             
 class DLASeg():
-    def __init__(self, heads, down_ratio, final_kernel, last_level, head_conv, out_channel=0):
+    def __init__(self, \
+                 config, \
+                 heads = {'hm': 1, 'wh': 2, 'id': 512, 'reg': 2}, \
+                 down_ratio = 4, \
+                 final_kernel = 1, \
+                 last_level = 5, \
+                 head_conv = 256, \
+                 out_channel=0):
+        self.cfg =config
         self.first_level = int(np.log2(down_ratio))
         self.last_level = last_level
         self.heads = heads
@@ -319,13 +217,24 @@ class DLASeg():
         self.final_kernel = final_kernel
         self.down_ratio = down_ratio
         self.name = 'dlaseg'
-        
+    
+    def proposal_map(self, y):
+        outputs = []
+        for head in self.heads:
+            classes = self.heads[head]
+            if self.head_conv > 0:
+                x = KL.Conv2D(self.head_conv, 3, name = self.name +'.' + head + '.conv1', padding = 'same', activation='relu')(y[-1])
+                x = KL.Conv2D(classes, self.final_kernel, name = self.name + '.' + head + '.conv2', padding = 'same')(x)
+            else:
+                x = KL.Conv2D(classes, self.final_kernel, name = self.name + '.' + head + '.conv', padding = 'same')(y[-1])
+            outputs.append(x)
+        return outputs
+    
     def detection(self, hm, wh, ids, reg, num_classes = 1, K = 128):
         hm = tf.nn.sigmoid(hm)
         hmax = tf.nn.max_pool2d(hm, 3, 1, 'SAME')
         km = tf.where(tf.equal(hmax, hm), hmax, tf.zeros_like(hmax))
-        bs, h, w, c = km.shape
-        bs = tf.shape(km)[0]   
+        bs, h, w, c = tf.shape(km)[0], tf.shape(km)[1], tf.shape(km)[2], tf.shape(km)[3] 
         
         scores, indices = tf.nn.top_k(tf.reshape(km, [bs, -1]), K)
         
@@ -340,21 +249,26 @@ class DLASeg():
         kid = tf.nn.l2_normalize(kid, axis = -1)
         x, y = tf.reshape(tf.cast(x, 'float32'), [-1, 1]) + krg[:, 0:1], tf.reshape(tf.cast(y, 'float32'), [-1, 1]) + krg[:, 1:2]
         
-        bboxes = tf.concat([x - kwh[:, 0:1]/2, \
-                            y - kwh[:, 1:2]/2, \
-                            x + kwh[:, 0:1]/2, \
-                            y + kwh[:, 1:2]/2, \
-                            tf.reshape(scores, [-1, 1]), \
-                            tf.reshape(tf.cast(classes, 'float32'), [-1, 1]), \
-                            tf.reshape(kid, [-1, tf.shape(kid)[-1]])], axis = -1)
-        bboxes = tf.reshape(bboxes, [bs, -1, 4 + 2 + tf.shape(kid)[-1]])
-        return bboxes
+        bboxes = tf.concat([(y - kwh[:, 1:2]/2)/tf.cast(h, 'float32'), \
+                            (x - kwh[:, 0:1]/2)/tf.cast(w, 'float32'), \
+                            (y + kwh[:, 1:2]/2)/tf.cast(h, 'float32'), \
+                            (x + kwh[:, 0:1]/2)/tf.cast(w, 'float32')],\
+                                axis = -1)
         
         
+        bboxes = tf.reshape(bboxes, [bs, -1, 4])
+        scores = tf.reshape(scores, [bs, -1, 1])
         
-    def __call__(self,x, training = None):
+        tscores = tf.where(tf.greater(scores, self.cfg.DETECTION_MIN_CONFIDENCE), tf.ones_like(scores), tf.zeros_like(scores))[..., 0]
+        nitems = tf.cast(tf.reduce_max(tf.reduce_sum(tscores, axis = 1)), 'int32')
+        bboxes = tf.slice(bboxes, [0, 0, 0], [bs, nitems, 4])
+        scores = tf.slice(scores, [0, 0, 0], [bs, nitems, 1])
+        
+        return [bboxes, scores]
+        
+    def reid(self, inputs, training = False):
         _base = Base([1, 1, 1, 2, 2, 1], [16, 32, 64, 128, 256, 512])
-        x = _base(x, training = training)
+        x = _base(inputs, training = training)
         channels = _base.channels
         scales = [2 ** i for i in range(len(channels[self.first_level:]))]
         x = DLAUp(self.first_level, channels[self.first_level:], scales)(x, training = training)
@@ -362,72 +276,66 @@ class DLASeg():
         for i in range(self.last_level - self.first_level):
             y.append(x[i])
             
-        reid_feature_map = y[-1]
+        reid_feature_map = y[0]
         if self.out_channel == 0:
             out_channel = channels[self.first_level]
-        IDAUp(out_channel, channels[self.first_level:self.last_level], [2 ** i for i in range(self.last_level - self.first_level)], self.name + '.idaup')(y, 0, len(y), training = training)
-        outputs = []
-        for head in self.heads:
-            classes = self.heads[head]
-            if self.head_conv > 0:
-                x = KL.Conv2D(self.head_conv, 3, name = self.name +'.' + head + '.conv1', padding = 'same', activation='relu')(y[-1])
-                x = KL.Conv2D(classes, self.final_kernel, name = self.name + '.' + head + '.conv2', padding = 'same')(x)
-            else:
-                x = KL.Conv2D(classes, self.final_kernel, name = self.name + '.' + head + '.conv', padding = 'same')(y[-1])
-            outputs.append(x)
-        #detection = KL.Lambda(lambda x : self.detection(*x))(outputs)
-        output = [KL.Lambda(lambda x : tf.stop_gradient(x))(reid_feature_map)]
-        return output
-        
-def DLA_MODEL():
-    inputs = KL.Input(shape = [608, 1088, 3])
-    outputs = DLASeg(heads = {'hm': 1, 'wh': 2, 'id': 512, 'reg': 2},\
-                     down_ratio = 4,\
-                     final_kernel = 1,\
-                     last_level = 5,\
-                     head_conv=256
-                     )(inputs)
-    return KM.Model(inputs, outputs)
+        enhanced_reid_feature_map = IDAUp(out_channel, channels[self.first_level:self.last_level], [2 ** i for i in range(self.last_level - self.first_level)], self.name + '.idaup')(y, 0, len(y), ret = True, training = training)
+        reid_feature_map = KL.Lambda(lambda x : tf.stop_gradient(x))(reid_feature_map)
+        enhanced_reid_feature_map = KL.Lambda(lambda x : tf.stop_gradient(x))(enhanced_reid_feature_map)
+        return y, [reid_feature_map, enhanced_reid_feature_map]
+    
+    def model(self, model_type):
+        '''
+        model_type: detection or reid
+            detection:pure detection network
+            reid: detection + reid
+        '''
+        input_image = KL.Input(shape = [None, None, 3], name ='input_image')
+        input_bbox = KL.Input(shape = [None, 4], name = 'input_bbox')
 
+        detection_map, reid_map = self.reid(input_image)
+        proposals = self.proposal_map(detection_map)
+        detection, scores = KL.Lambda(lambda x : self.detection(*x))(proposals)
+        if model_type == 'detection':
+            return KM.Model(inputs = [input_image, input_bbox], outputs = [detection, scores])
+        
+        bboxes = KL.Lambda(lambda x : tf.concat([x[0], x[1][..., :4], x[2]], axis = 1))([input_bbox, detection])
+        reid_map = ATLnet(reid_map, layer = self.cfg.layer, SEnet = self.cfg.SEnet)
+        reid_pooled = feature_pooling(self.cfg, name = 'alignedROIPooling')([bboxes] + reid_map)
+        reid_pooled = KL.Lambda(lambda x : tf.squeeze(x, axis = 0))(reid_pooled)
+        reid_vector = sMGN(reid_pooled, _eval = True, return_all = self.cfg.mgn, return_mgn = True, l2_norm = self.cfg.l2_norm)
+        reid_vector = KL.Lambda(lambda x : tf.expand_dims(x[:, 0, 0, :], axis = 0))(reid_vector)
+        prediction_vectors, detection_vectors = KL.Lambda(lambda x : [x[:, :tf.shape(input_bbox)[1], :], x[:, tf.shape(input_bbox)[1]:, :]])(reid_vector)
+        return KM.Model([input_image, input_bbox], [prediction_vectors, detection_vectors, detection, detection_score])
+        
+    
+    
+import cv2
+import time
+import os, sys
+parpath = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+curpath = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(parpath)
 from tools.load_weights import load_weights_by_name
+from tools.config import Config
+from tools.DataAugmentation import DataAugmentation as DA
+sys.path.remove(parpath)
 if __name__ == '__main__':
-    model = DLA_MODEL()
+    config = Config('dla_34')
+    model = DLASeg(config).model(model_type = 'detection')
     load_weights_by_name(model, 'dla_34.h5')
-    
-    def letterbox(img, height=608, width=1088,
-                  color=(127.5, 127.5, 127.5)):  # resize a rectangular image to a padded rectangular
-        shape = img.shape[:2]  # shape = [height, width]
-        ratio = min(float(height) / shape[0], float(width) / shape[1])
-        new_shape = (round(shape[1] * ratio), round(shape[0] * ratio))  # new_shape = [width, height]
-        dw = (width - new_shape[0]) / 2  # width padding
-        dh = (height - new_shape[1]) / 2  # height padding
-        top, bottom = round(dh - 0.1), round(dh + 0.1)
-        left, right = round(dw - 0.1), round(dw + 0.1)
-        img = cv2.resize(img, new_shape, interpolation=cv2.INTER_AREA)  # resized, no border
-        img = cv2.copyMakeBorder(img, top, bottom, left, right, cv2.BORDER_CONSTANT, value=color)  # padded rectangular
-        return img, ratio, dw, dh
-    
-    import cv2
-    import time
+    da = DA('validation', config)
     while 1:
         start = time.time()
         img0 = cv2.imread('test.jpg')
-        img, ratio, dw, dh = letterbox(img0, height=608, width=1088)
+        img, _, _, meta = da(img0, [])
+        dets, scores = model.predict([[img], np.zeros([1, 1, 4])])
+        boxes, scores = da.unmold(dets[0], meta), scores[0]
+        for i in range(0, boxes.shape[0]):
+            bbox = boxes[i][0:4]
+            cv2.rectangle(img0, (bbox[0], bbox[1]),
+                          (bbox[0]+bbox[2], bbox[1]+bbox[3]),
+                          (0, 255, 0), 2)
+        cv2.imwrite('dets.jpg', img0)
+        break
         
-        img = img[:, :, ::-1].astype(np.float32)/255.
-        dets = model.predict([[img]])
-        
-        dets = dets[0]
-        
-        min_confidence = 0.42
-        
-        remain_indices = dets[:, 4] > min_confidence
-        dets = dets[remain_indices]
-        
-        boxes, scores, features = dets[:, :4], dets[:, 4], dets[:, 6:]
-        
-        scale_x, scale_y = img0.shape[0] / img.shape[0], img0.shape[1] / img.shape[1]               
-        
-        boxes[:, [0, 2]] = (boxes[:, [0, 2]] * 4 - dw)/ratio
-        boxes[:, [1, 3]] = (boxes[:, [1, 3]] * 4 - dh)/ratio
-        print(time.time() - start)
