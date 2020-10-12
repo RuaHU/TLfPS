@@ -13,6 +13,7 @@ curpath = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(parpath)
 from YOLO import YOLOv3, YOLOv4
 from MaskRCNN import MaskRCNN, ANCHORS
+from dla_34 import DLASeg
 from tools.load_weights import load_weights_by_name
 sys.path.remove(parpath)
 
@@ -28,6 +29,8 @@ class MODELS():
         elif self.config.M in ['mrcnn']:
             mrcnn = MaskRCNN(self.config)
             self.model = mrcnn.model(model_type)
+        elif self.config.M in ['dla_34']:
+            self.model = DLASeg(self.config).model(model_type)
         else:
             raise ValueError('unsupported model type...')
     
@@ -39,4 +42,4 @@ class MODELS():
         print('loading weights for %s_%s from %s'%(self.config.M, model_name, model_path))
         load_weights_by_name(self.model, model_path)
         return self.model
-        
+    
