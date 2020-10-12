@@ -139,11 +139,11 @@ class DataAugmentation():
         window = meta[0][7:11]
         if self.config.M == 'dla_34':
             ratio = meta[0][11]
-            dh, dw = window[2:]
-            bboxes[:, [0, 2]] = (bboxes[:, [0, 2]] * 4 - dw)/ratio
-            bboxes[:, [1, 3]] = (bboxes[:, [1, 3]] * 4 - dh)/ratio
-            return bboxes
-            
+            dh, dw = window[:2]
+            bboxes[:, [0, 2]] = (bboxes[:, [0, 2]] * ih - dh)/ratio
+            bboxes[:, [1, 3]] = (bboxes[:, [1, 3]] * iw - dw)/ratio
+            bboxes[:, 2:] -= bboxes[:, :2]
+            return bboxes[:, [1, 0, 3, 2]]
         if self.config.letter_box == True:
             scale_x = scale_y = meta[0][11]
         else:
@@ -205,7 +205,7 @@ class DataAugmentation():
         image = cv2.resize(image, new_shape, interpolation=cv2.INTER_AREA)  # resized, no border
         img = cv2.copyMakeBorder(image, top, bottom, left, right, cv2.BORDER_CONSTANT, value=self.config.FILL_COLOR)  # padded rectangular
         window = (top, left, dh, dw)
-        return img[:, :, ::-1].astype(np.float32)/255., window, [ratio]
+        return img/255., window, [ratio]
 
     def yolo_resize_image_v3(self, image):
         if hasattr(self.config, 'RANDOM_SIZE') and self.mode == 'training':
@@ -224,7 +224,7 @@ class DataAugmentation():
         padding = [(top_pad, bottom_pad), (left_pad, right_pad), (0, 0)]
         image = np.pad(image, padding, mode='constant', constant_values=128)
         window = (top_pad, left_pad, h + top_pad, w + left_pad)
-        return image[:, :, ::-1].astype(np.float32)/255., window, [scale]
+        return image/255., window, [scale]
     
     def yolo_resize_image_v4(self, image):
         if hasattr(self.config, 'RANDOM_SIZE') and self.mode == 'training':
@@ -236,7 +236,7 @@ class DataAugmentation():
         scale_y = size / h
         image = cv2.resize(image, None, None, fx = scale_x, fy = scale_y, interpolation = cv2.INTER_CUBIC)
         window = (0, 0, image.shape[0], image.shape[1])
-        return image.astype(np.float32)/255., window, [scale_x, scale_y]
+        return image/255., window, [scale_x, scale_y]
 
     def mrcnn_resize_image(self, image):
         size = self.config.IMAGE_MAX_DIM
