@@ -39,12 +39,7 @@ class MODELS():
             yolov4 = YOLOv4(self.config)
             reid_feature_map = yolov4.reid(input_img, training = False)[1]
         elif self.config.M == 'dla_34':
-            reid_feature_map = DLASeg(heads = {'hm': 1, 'wh': 2, 'id': 512, 'reg': 2},\
-                                 down_ratio = 4,\
-                                 final_kernel = 1,\
-                                 last_level = 5,\
-                                 head_conv=256
-                                 )(input_img, training = False)
+            reid_feature_map = DLASeg(config=self.config).reid(input_img, training = False)[1]
             
         reid_map = ATLnet(reid_feature_map, layer = self.config.layer, SEnet = self.config.SEnet)
         pooled = feature_pooling(self.config, name = "AlignedROIPooling")([input_bbox] + reid_map)
