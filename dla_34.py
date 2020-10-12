@@ -299,14 +299,14 @@ class DLASeg():
         if model_type == 'detection':
             return KM.Model(inputs = [input_image, input_bbox], outputs = [detection, scores])
         
-        bboxes = KL.Lambda(lambda x : tf.concat([x[0], x[1][..., :4], x[2]], axis = 1))([input_bbox, detection])
+        bboxes = KL.Lambda(lambda x : tf.concat([x[0], x[1][..., :4]], axis = 1))([input_bbox, detection])
         reid_map = ATLnet(reid_map, layer = self.cfg.layer, SEnet = self.cfg.SEnet)
         reid_pooled = feature_pooling(self.cfg, name = 'alignedROIPooling')([bboxes] + reid_map)
         reid_pooled = KL.Lambda(lambda x : tf.squeeze(x, axis = 0))(reid_pooled)
         reid_vector = sMGN(reid_pooled, _eval = True, return_all = self.cfg.mgn, return_mgn = True, l2_norm = self.cfg.l2_norm)
         reid_vector = KL.Lambda(lambda x : tf.expand_dims(x[:, 0, 0, :], axis = 0))(reid_vector)
         prediction_vectors, detection_vectors = KL.Lambda(lambda x : [x[:, :tf.shape(input_bbox)[1], :], x[:, tf.shape(input_bbox)[1]:, :]])(reid_vector)
-        return KM.Model([input_image, input_bbox], [prediction_vectors, detection_vectors, detection, detection_score])
+        return KM.Model([input_image, input_bbox], [prediction_vectors, detection_vectors, detection, scores])
         
     
     
