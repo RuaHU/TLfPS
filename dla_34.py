@@ -230,6 +230,22 @@ class DLASeg():
             outputs.append(x)
         return outputs
     
+    def reid_map(self, inputs):
+        reg[0] = None
+        [print(inp.shape) for inp in inputs]
+        C2, C3, C4, C5 = KL.Lambda(lambda x : [tf.stop_gradient(item) for item in x])(inputs)
+        P5 = DarknetConv2D1(128, (1, 1), use_bias = False, name='dla_conv1')(C5)
+        P4 = KL.Add()([KL.UpSampling2D(size=(2, 2))(P5),
+            DarknetConv2D1(128, (1, 1), use_bias = False, name='dla_conv2')(C4)])
+        P3 = KL.Add()([KL.UpSampling2D(size=(2, 2))(P4),
+            DarknetConv2D1(128, (1, 1), use_bias = False, name='dla_conv3')(C3)])
+        P2 = KL.Add()([KL.UpSampling2D(size=(2, 2))(P3),
+            DarknetConv2D1(128, (1, 1), use_bias = False, name='dla_conv4')(C2)])
+        #reid feature map
+        P2_enhance = KL.Concatenate()([P2, C2])
+        return [P2, P2_enhance]
+
+    
     def detection(self, hm, wh, ids, reg, num_classes = 1, K = 128):
         hm = tf.nn.sigmoid(hm)
         hmax = tf.nn.max_pool2d(hm, 3, 1, 'SAME')
@@ -269,6 +285,7 @@ class DLASeg():
     def reid(self, inputs, training = False):
         _base = Base([1, 1, 1, 2, 2, 1], [16, 32, 64, 128, 256, 512])
         x = _base(inputs, training = training)
+        reid_map = self.reid_map(x[-4:])
         channels = _base.channels
         scales = [2 ** i for i in range(len(channels[self.first_level:]))]
         x = DLAUp(self.first_level, channels[self.first_level:], scales)(x, training = training)
@@ -276,13 +293,10 @@ class DLASeg():
         for i in range(self.last_level - self.first_level):
             y.append(x[i])
             
-        reid_feature_map = y[0]
         if self.out_channel == 0:
             out_channel = channels[self.first_level]
-        enhanced_reid_feature_map = IDAUp(out_channel, channels[self.first_level:self.last_level], [2 ** i for i in range(self.last_level - self.first_level)], self.name + '.idaup')(y, 0, len(y), ret = True, training = training)
-        reid_feature_map = KL.Lambda(lambda x : tf.stop_gradient(x))(reid_feature_map)
-        enhanced_reid_feature_map = KL.Lambda(lambda x : tf.stop_gradient(x))(enhanced_reid_feature_map)
-        return y, [reid_feature_map, enhanced_reid_feature_map]
+        IDAUp(out_channel, channels[self.first_level:self.last_level], [2 ** i for i in range(self.last_level - self.first_level)], self.name + '.idaup')(y, 0, len(y), ret = True, training = training)
+        return y, reid_map
     
     def model(self, model_type):
         '''
@@ -338,4 +352,4 @@ if __name__ == '__main__':
                           (0, 255, 0), 2)
         cv2.imwrite('dets.jpg', img0)
         break
-        
+        s
