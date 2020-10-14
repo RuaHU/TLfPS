@@ -352,4 +352,3 @@ if __name__ == '__main__':
                           (0, 255, 0), 2)
         cv2.imwrite('dets.jpg', img0)
         break
-        s
