@@ -89,7 +89,9 @@ def get_gradients(self, loss, params):
 - get weights from the corresponding projects and convert them to .h5 format
 - put .h5 weights in pretrianed_weights with name [yolov4.h5], [mrcnn.h5], [dla_34.h5]
 - change [yolov3] to [yolov4], [mrcnn], [dla-34] etc. The training process is the same with the training of [yolov3]
-
+- for convenience， we provide the well-trained weights, 
+[yolov4_reid.h5](https://drive.google.com/file/d/1X2sK-hBAviJh3CRxKXNQxSsxtmS52431/view?usp=sharing), 
+[dla_34_reid.h5](https://drive.google.com/file/d/1CrjMNYdtmLMb60xiPGgAeRoKSkujawQa/view?usp=sharing)
 ## Train YOLOv3 detection network
 
 - 
