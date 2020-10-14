@@ -294,6 +294,8 @@ class MyFrame(wx.Frame):
         
         if self.config.M == 'mrcnn':
             feats, _, _, _, features, detection, _ = self.model.predict([np.stack([input_img]), np.stack([input_box]), np.stack([self.anchors.get_anchors(input_img.shape)])])
+        elif self.config.M == 'dla_34':
+            feats, det_features, det, _ = self.reid_model.predict([np.stack([input_img]), np.stack([input_box])])
         else:
             feats, _, _, _, features, detection, _ = self.model.predict([np.stack([input_img]), np.stack([input_box])])
             detection = self.DA.unmold(detection[0], meta)
