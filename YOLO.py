@@ -220,7 +220,7 @@ class YOLOv4:
                                                                                          x[:, tf.shape(input_bbox)[1]:(2*tf.shape(input_bbox)[1]), :], \
                                                                                          x[:, (2*tf.shape(input_bbox)[1]):, :]])(reid_vector)
         
-            return KM.Model([input_image, input_bbox], [prediction_vectors, regressed_vectors, regression, regression_scores], name = 'yolo_reid')
+            return KM.Model([input_image, input_bbox], [prediction_vectors, regressed_vectors, regression, regression_scores, detection_vectors, detection, detection_score])
         
     def proposal_map(self, inputs, training = None):
         '''pyramid feature maps yolov4'''
