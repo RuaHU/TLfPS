@@ -196,7 +196,7 @@ class EVALUATION():
         log = open('log.txt', 'w')
         sysout = sys.stdout
         all_recall_rate = []
-        tape = {}
+        #tape = {}
         for i, query in enumerate(self.query_list):
             sys.stdout = log
             qimg_name, qroi, qid = query
@@ -252,7 +252,7 @@ class EVALUATION():
             y_gname = y_gname[inds]
             acc = [min(1, sum(y_true[:k])) for k in topk]
             accs.append(acc)
-            tape[qimg_name] = [qid, qroi, ap, acc, recall_rate, y_score, y_true, y_boxes, y_gname]
+            #tape[qimg_name] = [qid, qroi, ap, acc, recall_rate, y_score, y_true, y_boxes, y_gname]
             sys.stdout = sysout
             print("\r%d:\t%d|%d|%.2f|%.2f"%(-1, len(aps), len(qfeatures), np.mean(aps), np.mean(accs, axis = 0)[0]), end = '')
         print('')
@@ -263,18 +263,18 @@ class EVALUATION():
         for i, k in enumerate(topk):
             print('  top-{:2d} = {:.2%}'.format(k, accs[i]))
         
-        record_aps = []
-        new_tape = {}
-        for key in tape.keys():
-            record_aps.append(tape[key][2])
-        record_aps.sort()
-        th = record_aps[50]
-        for key in tape.keys():
-            if tape[key][2] > th:continue
-            new_tape[key] = tape[key]
+        #record_aps = []
+        #new_tape = {}
+        #for key in tape.keys():
+        #    record_aps.append(tape[key][2])
+        #record_aps.sort()
+        #th = record_aps[50]
+        #for key in tape.keys():
+        #    if tape[key][2] > th:continue
+        #    new_tape[key] = tape[key]
         
-        filepath = os.path.join(parpath, 'experiment_results', self.experiment_name, 'prw_%s_tape.pkl'%self.config.M)
-        pickle.dump(new_tape, filepath)
+        #filepath = os.path.join(parpath, 'experiment_results', self.experiment_name, 'prw_%s_tape.pkl'%self.config.M)
+        #pickle.dump(new_tape, filepath)
         
         return aps, accs
 
