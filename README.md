@@ -50,7 +50,7 @@ python utils/TSNE.py -m yolov3 -g 0 -p prw -e prw_default
 python utils/failure_cases.py -m yolov3 -g 0 -p path/to/PRW -e prw_default
 ```
 - TSNE visualization for PRW, point version
-![TSNE_PRW.jpg](https://github.com/RuaHU/TLfPS/blob/master/experiment_results/TSNE_PRW.jpg)
+![TSNE_PRW.jpg](https://github.com/RuaHU/TLfPS/blob/master/experiment_results/tSNE_PRW.jpg)
 - TSNE visualization for PRW, image version, high resolution image is able to [download](https://drive.google.com/file/d/1269Zz3M8P6eYnhNK0JYsZua1Oep7zh8_/view?usp=sharing)
 ![prw low resolution](https://github.com/RuaHU/TLfPS/blob/master/experiment_results/prw_low.jpg)
 - 48 failure cases in PRW. (3 images a group, first is query, then false positive, then true negative. note there are some mistakes from the dataset)
